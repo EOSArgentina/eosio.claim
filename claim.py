@@ -1,0 +1,99 @@
+import sys
+import json
+import time
+import requests as req
+from datetime import datetime, timedelta
+from sha3 import keccak_256
+from bitcoin import *
+from tempfile import mktemp
+from subprocess import Popen, PIPE
+
+def url_for(url):
+	return 'http://127.0.0.1:8888{0}'.format(url)
+
+def ref_block(block_id):
+  block_num    = block_id[0:8]
+  block_prefix = block_id[16:16+8]
+
+  # print block_id
+  # print block_num, block_prefix
+  
+  ref_block_num     = int(block_num,16)
+  ref_block_prefix  = int("".join(reversed([block_prefix[i:i+2] for i in range(0, len(block_prefix), 2)])),16)
+
+  return ref_block_num, ref_block_prefix
+
+if len(sys.argv) < 3:
+	print "claim.py ETHPRIV EOSACCOUNT"
+	print "    ETHPRIV   : Ethereum private key. (can be in Wif or hex format)"
+	print "    EOSACCOUNT: Desired EOS account name"
+	sys.exit(1)
+
+block_id = req.get(url_for('/v1/chain/get_info')).json()['last_irreversible_block_id']
+
+ref_block_num, ref_block_prefix = ref_block( block_id )
+
+priv = sys.argv[1]
+eos_account = sys.argv[2]
+
+pub = privtopub(priv)
+
+msg = '%d,%d' % (ref_block_num, ref_block_prefix)
+msghash = keccak_256(msg).digest()
+
+v, r, s = ecdsa_raw_sign(msghash, encode_privkey(priv,'hex').decode('hex'))
+
+binargs = req.post(url_for('/v1/chain/abi_json_to_bin'),json.dumps({
+	"code"   : "eosio.claim",
+	"action" : "regaccount",
+	"args"   : {
+		"message"   : msg,
+		"pubkey"    : pub,
+		"signature" : '%x%x%x' % (r,s,v),
+		"account"   : eos_account
+	}
+})).json()['binargs']
+
+tx_json = """
+{
+  "expiration": "%s",
+  "ref_block_num": %d,
+  "ref_block_prefix": %d,
+  "max_net_usage_words": 0,
+  "max_cpu_usage_ms": 0,
+  "delay_sec": 0,
+  "context_free_actions": [],
+  "actions": [{
+      "account": "eosio.claim",
+      "name": "regaccount",
+      "authorization": [{
+          "actor": "%s",
+          "permission": "active"
+        }
+      ],
+      "data": %s
+    }
+  ],
+  "transaction_extensions": [],
+  "signatures": [],
+  "context_free_data": []
+}
+""" % (
+	(datetime.utcnow() + timedelta(minutes=3)).strftime("%Y-%m-%dT%T"),
+	ref_block_num, 
+	ref_block_prefix,
+	"thisisatesta",
+	binargs
+)
+
+utx = mktemp()
+with open(utx,"w") as f:
+	f.write(tx_json)
+
+p = Popen(["cleos","sign","-p","-k","5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3",utx], stdout=PIPE)
+output, err = p.communicate("")
+if p.returncode:
+	#print "ERROR"
+	sys.exit(1)
+
+sys.exit(0)
