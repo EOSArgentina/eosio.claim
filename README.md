@@ -1,3 +1,5 @@
+![Alt Text](https://i.imgur.com/6F5aHWH.png)
+
 # Build
 
 eosiocpp -o eosio.claim.wast eosio.claim.cpp

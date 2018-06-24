@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import time
@@ -86,14 +87,20 @@ tx_json = """
 	binargs
 )
 
-utx = mktemp()
-with open(utx,"w") as f:
+tmpf = mktemp()
+with open(tmpf,"w") as f:
 	f.write(tx_json)
 
-p = Popen(["cleos","sign","-p","-k","5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3",utx], stdout=PIPE)
-output, err = p.communicate("")
+with open(os.devnull, 'w') as devnull:
+  cmd = ["cleos","sign","-p","-k","5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3",tmpf]
+  p = Popen(cmd, stdout=PIPE, stderr=devnull)
+  output, err = p.communicate("")
+
 if p.returncode:
-	#print "ERROR"
 	sys.exit(1)
 
+with open(tmpf,"w") as f:
+  f.write(output)
+
+print tmpf
 sys.exit(0)
