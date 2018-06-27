@@ -16,13 +16,14 @@ ACCOUNT=$(openssl rand -hex 32 | base32 | tr '[:upper:]' '[:lower:]' | head -c12
 ADDY=$(python get_eth_address.py $PRIV)
 AMOUNT=$(python -c 'import random; print "%.4f" % (random.random()*1000)')
 
-# Print eosio balance
+# Print eosio.unregd balance
 SUPPLY_BEFORE=$(cleos get currency stats eosio.token eos | jq -r '.EOS.supply')
 echo "* EOS supply before claim $BLUE$SUPPLY_BEFORE$NC"
 
 # Add test unregd data for this address
 echo "* Adding $ACCOUNT to eosio.unregd db with $GREEN$AMOUNT EOS$NC"
 cleos push action eosio.unregd add '["'$ADDY'","'$AMOUNT' EOS"]' -p eosio.unregd > /dev/null 2>&1
+cleos transfer eosio eosio.unregd "$AMOUNT EOS" -p eosio > /dev/null 2>&1
 
 # Claim
 r=-1

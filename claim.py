@@ -45,7 +45,7 @@ msghash = keccak_256(msg).digest()
 v, r, s = ecdsa_raw_sign(msghash, encode_privkey(priv,'hex').decode('hex'))
 
 binargs = req.post(url_for('/v1/chain/abi_json_to_bin'),json.dumps({
-	"code"   : "eosio.claim",
+	"code"   : "eosio.unregd",
 	"action" : "regaccount",
 	"args"   : {
 		"message"   : msg,
@@ -65,7 +65,7 @@ tx_json = """
   "delay_sec": 0,
   "context_free_actions": [],
   "actions": [{
-      "account": "eosio.claim",
+      "account": "eosio.unregd",
       "name": "regaccount",
       "authorization": [{
           "actor": "%s",
