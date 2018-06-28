@@ -17,6 +17,7 @@ You need to have nodeos running.
 # Dependecies
 
  ```pip install bitcoin --user```
+ ```pip install requests --user```
  ```sudo apt-get install python-pysha3```
 
 # Test
