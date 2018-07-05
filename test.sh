@@ -6,11 +6,13 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;35m'
 NC='\033[0m' # No Color
 
+PRIV_HEX=$(openssl rand -hex 32)
+
 PRIV=$(python -c '
 import sys
 import bitcoin as b
 print b.encode_privkey(sys.argv[1],"wif")
-' $(openssl rand -hex 32))
+' $PRIV_HEX)
 
 ACCOUNT=$(openssl rand -hex 32 | base32 | tr '[:upper:]' '[:lower:]' | head -c12)
 ADDY=$(python get_eth_address.py $PRIV)
@@ -29,7 +31,7 @@ cleos transfer eosio eosio.unregd "$AMOUNT EOS" -p eosio > /dev/null 2>&1
 r=-1
 while [ "$r" != "0" ]; do
   sleep 0.5
-  RES=$(python claim.py $PRIV $ACCOUNT)
+  RES=$(python claim.py $PRIV_HEX $ACCOUNT)
   r=$?
 done
 #echo $RES

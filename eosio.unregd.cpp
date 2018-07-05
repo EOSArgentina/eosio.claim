@@ -1,5 +1,5 @@
 #include "eosio.unregd.hpp"
-
+#include <eosiolib/crypto.h>
 using eosio::unregd;
 
 EOSIO_ABI(eosio::unregd, (add)(regaccount))
@@ -24,11 +24,9 @@ void unregd::add(const ethereum_address& ethereum_address, const asset& balance)
 /**
  * Register an EOS account using the stored information (address/balance) verifying an ETH signature
  */
-void unregd::regaccount(const string& message, const bytes& pubkey, const bytes& signature, const string& account) {
-   
-  eosio_assert(message.size(), "Empty message");
-  eosio_assert(pubkey.size() == 65, "Invalid pubkey");
-  eosio_assert(signature.size() == 65, "Invalid signature");
+void unregd::regaccount(const bytes& signature, const string& account) {
+
+  eosio_assert(signature.size() == 66, "Invalid signature");
   eosio_assert(account.size() == 12, "Invalid account length");
 
   // Verify that the destination account name is valid
@@ -42,23 +40,35 @@ void unregd::regaccount(const string& message, const bytes& pubkey, const bytes&
   // Verify that the account does not exists
   eosio_assert(!is_account(naccount), "Account already exists");
 
-  // Extract block prefix/num from message
-  auto pos = message.find(",");
-  eosio_assert( pos != string::npos,  "Malformed message" );
+  // Calculate message hash based on current TX block num/prefix
+  char* message = (char*)malloc(64);
+  sprintf(message, "%u,%u", tapos_block_num(), tapos_block_prefix());
 
-  auto msg_block_num = atoi(message.substr(0,pos).c_str());
-  auto msg_block_prefix = atoi(message.substr(pos+1).c_str());
+  checksum256 digest;
+  sha256(message, strlen(message), &digest);
 
-  // Verify that the current TX has the same block prefix/num as message
-  eosio_assert( tapos_block_num() == msg_block_num, "Invalid block_num" );
-  eosio_assert( tapos_block_prefix() == msg_block_prefix, "Invalid block_prefix" );
+  // Recover compressed pubkey from signature
+  uint8_t* pubkey = (uint8_t*)malloc(64);
+  uint8_t* compressed_pubkey = (uint8_t*)malloc(34);
+  auto res = recover_key(
+    &digest,
+    signature.data(),
+    signature.size(),
+    (char*)compressed_pubkey,
+    34
+  );
 
-  // Calculate ETH address based on publickey
+  eosio_assert(res == 34, "Recover key failed");
+
+  // Decompress pubkey
+  uECC_decompress(compressed_pubkey+1, pubkey, uECC_secp256k1());
+
+  // Calculate ETH address based on decompressed pubkey
   sha3_ctx* shactx = (sha3_ctx*)malloc(sizeof(sha3_ctx));
 
   checksum256 msghash;
   rhash_keccak_256_init(shactx);
-  rhash_keccak_update(shactx, (uint8_t*)&pubkey[1], 64);
+  rhash_keccak_update(shactx, pubkey, 64);
   rhash_keccak_final(shactx, msghash.hash);
 
   uint8_t* eth_address = (uint8_t*)malloc(20);
@@ -71,33 +81,17 @@ void unregd::regaccount(const string& message, const bytes& pubkey, const bytes&
   auto itr = index.find(compute_ethereum_address_key256(eth_address));
   eosio_assert(itr != index.end(), "Address not found");
 
-  // Calculate hash(message) and verify ETH signature against publickey
-  rhash_keccak_256_init(shactx);
-  rhash_keccak_update(shactx, (uint8_t*)message.data(), message.size());
-  rhash_keccak_final(shactx, msghash.hash);
-
-  auto res = uECC_verify((const uint8_t *)&pubkey[1],
-    msghash.hash, 32,
-    (const uint8_t *)&signature[0],
-    uECC_secp256k1()
-  );
-
-  eosio_assert(res == 1, "Signature verification failed");
-
   // Split contribution balance into cpu/net/liquid
   auto balances = split_snapshot(itr->balance);
   eosio_assert(balances.size() == 3, "Unable to split snapshot");
   eosio_assert(itr->balance == balances[0] + balances[1] + balances[2], "internal error");
 
-  // Generate EOS key based on signature's pubkey
-  std::array<char,33> eospub;
-  uECC_compress((const uint8_t *)&pubkey[1], (uint8_t*)eospub.data(), uECC_secp256k1());
-
   // Calculate the amount of EOS to purchase 8k of RAM
   auto amount_to_purchase_8kb_of_RAM = buyrambytes(8*1024);
 
   // Build authority with just one k1 key
-  auto auth = authority{1,{{{0,eospub},1}},{},{}};
+  auto eospub = reinterpret_cast<std::array<char,33>*>(compressed_pubkey+1);
+  auto auth = authority{1,{{{0,*eospub},1}},{},{}};
 
   // Issue to eosio.unregd the necesary EOS to buy 8K of RAM
   INLINE_ACTION_SENDER(call::token, issue)( N(eosio.token), {{N(eosio),N(active)}},
