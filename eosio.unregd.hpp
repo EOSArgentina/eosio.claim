@@ -51,7 +51,7 @@ class unregd : public contract {
 
   // Actions
   void add(const ethereum_address& ethereum_address, const asset& balance);
-  void regaccount(const bytes& signature, const string& account);
+  void regaccount(const bytes& signature, const string& account, const eosio::public_key& eos_pubkey);
 
  private:
   static uint8_t hex_char_to_uint(char character) {

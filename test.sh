@@ -27,11 +27,18 @@ echo "* Adding $ACCOUNT to eosio.unregd db with $GREEN$AMOUNT EOS$NC"
 cleos push action eosio.unregd add '["'$ADDY'","'$AMOUNT' EOS"]' -p eosio.unregd > /dev/null 2>&1
 cleos transfer eosio eosio.unregd "$AMOUNT EOS" -p eosio > /dev/null 2>&1
 
+TMP=$(mktemp)
+cleos create key > $TMP
+EOSPRIV=$(head -n1 $TMP | awk '{n=split($0,a," "); print a[n];}')
+EOSPUB=$(tail -n1 $TMP | awk '{n=split($0,a," "); print a[n];}')
+
+echo "* Using $EOSPUB for account $ACCOUNT"
+
 # Claim
 r=-1
 while [ "$r" != "0" ]; do
   sleep 0.5
-  RES=$(python claim.py $PRIV_HEX $ACCOUNT)
+  RES=$(python claim.py $PRIV_HEX $ACCOUNT $EOSPUB)
   r=$?
 done
 #echo $RES
@@ -44,9 +51,9 @@ echo "* Total new EOS issued $RED$TOTAL_ISSUED$NC"
 RAMCOST=$(cat $RES | jq -r '.processed.action_traces[].inline_traces[2].act.data.quant')
 echo "* EOS payed for 8192 [bytes] of RAM $RED$RAMCOST$NC"
 
-# Transfer to test ETH privkey
-echo -n "* Using ETH private key to make a transfer on EOS .... "
-cleos wallet import $PRIV > /dev/null 2>&1
+# Transfer to test privkey
+echo -n "* Using private key to make a transfer on EOS .... "
+cleos wallet import $EOSPRIV > /dev/null 2>&1
 cleos transfer $ACCOUNT thisisatesta "0.0001 EOS" > /dev/null 2>&1
 if [ $? -eq 0 ]; then
   echo "$GREEN""OK$NC"

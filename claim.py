@@ -10,7 +10,7 @@ from tempfile import mktemp
 from subprocess import Popen, PIPE
 
 def url_for(url):
-	return 'http://127.0.0.1:8888{0}'.format(url)
+  return 'http://127.0.0.1:8888{0}'.format(url)
 
 def ref_block(block_id):
   block_num    = block_id[0:8]
@@ -22,10 +22,10 @@ def ref_block(block_id):
   return ref_block_num, ref_block_prefix
 
 if len(sys.argv) < 3:
-	print "claim.py ETHPRIV EOSACCOUNT"
-	print "    ETHPRIV   : Ethereum private key. (can be in Wif or hex format)"
-	print "    EOSACCOUNT: Desired EOS account name"
-	sys.exit(1)
+  print "claim.py ETHPRIV EOSACCOUNT"
+  print "    ETHPRIV   : Ethereum private key. (can be in Wif or hex format)"
+  print "    EOSACCOUNT: Desired EOS account name"
+  sys.exit(1)
 
 block_id = req.get(url_for('/v1/chain/get_info')).json()['last_irreversible_block_id']
 
@@ -33,6 +33,7 @@ ref_block_num, ref_block_prefix = ref_block( block_id )
 
 priv = sys.argv[1]
 eos_account = sys.argv[2]
+eos_pub = sys.argv[3]
 
 msg = '%d,%d'%(ref_block_num, ref_block_prefix)
 
@@ -41,12 +42,13 @@ v, r, s = ecdsa_raw_sign(msghash, encode_privkey(priv,'hex').decode('hex'))
 signature = '00%x%x%x' % (v,r,s)
 
 binargs = req.post(url_for('/v1/chain/abi_json_to_bin'),json.dumps({
-	"code"   : "eosio.unregd",
-	"action" : "regaccount",
-	"args"   : {
-		"signature" : signature,
-		"account"   : eos_account
-	}
+  "code"   : "eosio.unregd",
+  "action" : "regaccount",
+  "args"   : {
+    "signature"  : signature,
+    "account"    : eos_account,
+    "eos_pubkey" : eos_pub
+  }
 })).json()['binargs']
 
 tx_json = """
@@ -74,16 +76,16 @@ tx_json = """
   "context_free_data": []
 }
 """ % (
-	(datetime.utcnow() + timedelta(minutes=3)).strftime("%Y-%m-%dT%T"),
-	ref_block_num, 
-	ref_block_prefix,
-	"thisisatesta",
-	binargs
+  (datetime.utcnow() + timedelta(minutes=3)).strftime("%Y-%m-%dT%T"),
+  ref_block_num, 
+  ref_block_prefix,
+  "thisisatesta",
+  binargs
 )
 
 tmpf = mktemp()
 with open(tmpf,"w") as f:
-	f.write(tx_json)
+  f.write(tx_json)
 
 # print tmpf
 # sys.exit(0)
@@ -94,7 +96,7 @@ with open(os.devnull, 'w') as devnull:
   output, err = p.communicate("")
 
 if p.returncode:
-	sys.exit(1)
+  sys.exit(1)
 
 with open(tmpf,"w") as f:
   f.write(output)

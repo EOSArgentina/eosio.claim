@@ -24,7 +24,7 @@ void unregd::add(const ethereum_address& ethereum_address, const asset& balance)
 /**
  * Register an EOS account using the stored information (address/balance) verifying an ETH signature
  */
-void unregd::regaccount(const bytes& signature, const string& account) {
+void unregd::regaccount(const bytes& signature, const string& account, const eosio::public_key& eos_pubkey) {
 
   eosio_assert(signature.size() == 66, "Invalid signature");
   eosio_assert(account.size() == 12, "Invalid account length");
@@ -74,7 +74,7 @@ void unregd::regaccount(const bytes& signature, const string& account) {
   uint8_t* eth_address = (uint8_t*)malloc(20);
   memcpy(eth_address, msghash.hash + 12, 20);
 
-  // Verify that the ETH address exists in eosio.unregd contract
+  // Verify that the ETH address exists in the "addresses" eosio.unregd contract table
   addresses_index addresses(_self, _self);
   auto index = addresses.template get_index<N(ethereum_address)>();
 
@@ -89,9 +89,8 @@ void unregd::regaccount(const bytes& signature, const string& account) {
   // Calculate the amount of EOS to purchase 8k of RAM
   auto amount_to_purchase_8kb_of_RAM = buyrambytes(8*1024);
 
-  // Build authority with just one k1 key
-  auto eospub = reinterpret_cast<std::array<char,33>*>(compressed_pubkey+1);
-  auto auth = authority{1,{{{0,*eospub},1}},{},{}};
+  // Build authority with the pubkey passed as parameter
+  auto auth = authority{1,{{eos_pubkey,1}},{},{}};
 
   // Issue to eosio.unregd the necesary EOS to buy 8K of RAM
   INLINE_ACTION_SENDER(call::token, issue)( N(eosio.token), {{N(eosio),N(active)}},
